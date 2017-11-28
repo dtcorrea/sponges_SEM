@@ -1,3 +1,6 @@
+## There are too many data points using pairwise data and the server couldn't handle
+# I'll use axes of the ordination as the variables instead of the pairwise distances
+
 library(phyloseq)
 library(tidyverse)
 library(raster)
@@ -202,8 +205,81 @@ complete_sponge_raref <- cbind(complete_sponge_raref, diversity_raref)
 dim(complete_sponge_raref)
 names(complete_sponge_raref)
 class(complete_sponge_raref)
+head(complete_sponge_raref)
 
+
+# Now I need to include spatial variables (PCNMs) and phylogenetic variables
+
+## Calculating node distance
+library(adephylo)
+node_dist <- distTips(tree)
+class(node_dist)
+pcoa_phylo <- ape::pcoa(node_dist)
+biplot(pcoa_phylo)
+
+pcoa_phylo_vectors <- pcoa_phylo$vectors[,1:2]
+colnames(pcoa_phylo_vectors) <- c("phylo1", "phylo2")
+pcoa_phylo_vectors <- mutate(as.data.frame(pcoa_phylo_vectors), std_host_name = rownames(pcoa_phylo_vectors))
+
+complete_sponge_raref <- left_join(complete_sponge_raref, pcoa_phylo_vectors, by="std_host_name")
+
+# Next I need the PCNMs
 library(vegan)
+lat_long_sponge <- dplyr::select(complete_sponge_raref, sample_name, latitude, longitude)
+head(lat_long_sponge)
+
+library(fossil)
+dists <- earth.dist(data.frame(longitude=lat_long_sponge$longitude, latitute=lat_long_sponge$latitude), dist=F)
+class(dists)
+
+pcnm_sponges <- pcnm(dists)
+pcnm_sponges_scores <- data.frame(scores(pcnm_sponges), sample_name=lat_long_sponge$sample_name)
+
+ordisurf(lat_long_sponge[,2:3], scores(pcnm_sponges, choi=1), bubble = 4, main = "PCNM 1")
+ordisurf(lat_long_sponge[,2:3], scores(pcnm_sponges, choi=2), bubble = 4, main = "PCNM 2")
+ordisurf(lat_long_sponge[,2:3], scores(pcnm_sponges, choi=3), bubble = 4, main = "PCNM 3")
+
+## forward selection
+
+# A function to make the OTU table ready to vegan
+veganotu = function(physeq) {
+  require("vegan")
+  OTU = otu_table(physeq)
+  if (taxa_are_rows(OTU)) {
+    OTU = t(OTU)
+  }
+  return(as(OTU, "matrix"))
+}
+
+sponge_vegan <- veganotu(final_sponge_no_na_ns_10k_raref)
+
+rda.1 <- rda(sponge_vegan ~ ., data=dplyr::select(pcnm_sponges_scores, -sample_name))
+plot(rda.1)
+anova.sponges.cca.all <- anova.cca(rda.1)
+anova.sponges.cca.all
+
+formula(rda.1)
+
+#rda_ordistep <- rda(skin_1000_raref_vegan ~ Axis.1 + Axis.2 + Axis.3 + Axis.4 + Axis.5 + Axis.6 + Axis.7 + Axis.8
+#                    + Axis.9 + Axis.10 + Axis.11 + Axis.12 + Axis.13 + Axis.14 + Axis.15 + Axis.16, data=pcoa_axes)
+
+rda.0 <- rda(sponge_vegan ~ 1, data=dplyr::select(pcnm_sponges_scores, -sample_name))
+
+forward_sel <- ordistep(rda.0, scope= formula(rda.1))
+#taking forever to run
+forward_sel
+
+only_ordistep <- ordistep(rda_ordistep, pstep=1000)
+
+mod0 <- rda(skin_1000_raref_vegan ~ 1, pcoa_axes)
+mod1 <- rda(skin_1000_raref_vegan ~., pcoa_axes)
+
+or2step_skin <- ordiR2step(mod0, mod1, pstep=1000)
+or2step_skin$anova
+rownames(or2step_skin$anova)
+
+
+
 # calculate pairwise bray curtis distances
 #vegdist(otu_table(final_sponge_no_na_ns_10k_raref), method="bray")
 
@@ -361,7 +437,5 @@ prepareMplusData(final_sponge_dists_std_toMplus, "/Users/decio/Documents/UT-AUST
 plot(final_sponge_dists_std_toMplus$node_dist, final_sponge_dists_std_toMplus$dist.bray)
 plot(final_sponge_dists_std_toMplus$dist_km, final_sponge_dists_std_toMplus$dist.bray)
 
-## There are too many data points using pairwise data and the server couldn't handle
-# I'll use axes of the ordination as the variables instead of the pairwise distances
 
 
