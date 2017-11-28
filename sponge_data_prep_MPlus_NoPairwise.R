@@ -208,7 +208,7 @@ class(complete_sponge_raref)
 head(complete_sponge_raref)
 
 
-# Now I need to include spatial variables (PCNMs) and phylogenetic variables
+# Now I need to include phylogenetic variables
 
 ## Calculating node distance
 library(adephylo)
@@ -223,219 +223,27 @@ pcoa_phylo_vectors <- mutate(as.data.frame(pcoa_phylo_vectors), std_host_name = 
 
 complete_sponge_raref <- left_join(complete_sponge_raref, pcoa_phylo_vectors, by="std_host_name")
 
-# Next I need the PCNMs
-library(vegan)
-lat_long_sponge <- dplyr::select(complete_sponge_raref, sample_name, latitude, longitude)
-head(lat_long_sponge)
 
-library(fossil)
-dists <- earth.dist(data.frame(longitude=lat_long_sponge$longitude, latitute=lat_long_sponge$latitude), dist=F)
-class(dists)
+write.csv(complete_sponge_raref, file = "/Users/decio/Documents/UT-AUSTIN/13_Fall_2017/SEM course/sponges/complete_sponge_raref.csv")
 
-pcnm_sponges <- pcnm(dists)
-pcnm_sponges_scores <- data.frame(scores(pcnm_sponges), sample_name=lat_long_sponge$sample_name)
-
-ordisurf(lat_long_sponge[,2:3], scores(pcnm_sponges, choi=1), bubble = 4, main = "PCNM 1")
-ordisurf(lat_long_sponge[,2:3], scores(pcnm_sponges, choi=2), bubble = 4, main = "PCNM 2")
-ordisurf(lat_long_sponge[,2:3], scores(pcnm_sponges, choi=3), bubble = 4, main = "PCNM 3")
-
-## forward selection
-
-# A function to make the OTU table ready to vegan
-veganotu = function(physeq) {
-  require("vegan")
-  OTU = otu_table(physeq)
-  if (taxa_are_rows(OTU)) {
-    OTU = t(OTU)
-  }
-  return(as(OTU, "matrix"))
-}
-
-sponge_vegan <- veganotu(final_sponge_no_na_ns_10k_raref)
-
-rda.1 <- rda(sponge_vegan ~ ., data=dplyr::select(pcnm_sponges_scores, -sample_name))
-plot(rda.1)
-anova.sponges.cca.all <- anova.cca(rda.1)
-anova.sponges.cca.all
-
-formula(rda.1)
-
-#rda_ordistep <- rda(skin_1000_raref_vegan ~ Axis.1 + Axis.2 + Axis.3 + Axis.4 + Axis.5 + Axis.6 + Axis.7 + Axis.8
-#                    + Axis.9 + Axis.10 + Axis.11 + Axis.12 + Axis.13 + Axis.14 + Axis.15 + Axis.16, data=pcoa_axes)
-
-rda.0 <- rda(sponge_vegan ~ 1, data=dplyr::select(pcnm_sponges_scores, -sample_name))
-
-forward_sel <- ordistep(rda.0, scope= formula(rda.1))
-#taking forever to run
-forward_sel
-
-only_ordistep <- ordistep(rda_ordistep, pstep=1000)
-
-mod0 <- rda(skin_1000_raref_vegan ~ 1, pcoa_axes)
-mod1 <- rda(skin_1000_raref_vegan ~., pcoa_axes)
-
-or2step_skin <- ordiR2step(mod0, mod1, pstep=1000)
-or2step_skin$anova
-rownames(or2step_skin$anova)
-
-
-
-# calculate pairwise bray curtis distances
-#vegdist(otu_table(final_sponge_no_na_ns_10k_raref), method="bray")
-
-# A function to make the OTU table ready to vegan
-veganotu = function(physeq) {
-  require("vegan")
-  OTU = otu_table(physeq)
-  if (taxa_are_rows(OTU)) {
-    OTU = t(OTU)
-  }
-  return(as(OTU, "matrix"))
-}
-
-sponge_vegan <- veganotu(final_sponge_no_na_ns_10k_raref)
-
-sponge_vegdist <- vegdist(sponge_vegan, method="bray")
-
-library(reshape2)
-pairwise_vegdist <- melt(as.matrix(sponge_vegdist), value.name="dist.bray")
-head(pairwise_vegdist)
-dim(pairwise_vegdist)
-
-# Next I'll calculate pairwise geographic distance
-lat_long_sponge <- dplyr::select(complete_sponge_raref, sample_name, latitude, longitude)
-head(lat_long_sponge)
-
-library(fossil)
-dists <- earth.dist(data.frame(lat_long_sponge[,3,drop=F], latitute=lat_long_sponge$latitude), dist=F)
-class(dists)
-pairwise_dists <- melt(dists, value.name="dist_km")
-head(pairwise_dists)
-dim(pairwise_dists)
-
-
-
-## Calculating node distance
-library(adephylo)
-node_dist <- distTips(tree)
-class(node_dist)
-as.matrix(node_dist)
-species_dist <- subset(melt(as.matrix(node_dist)), value!=0)
-head(species_dist)
-
-head(pairwise_vegdist)
-
-first_join <-complete_sponge_raref %>% dplyr::select(sample_name, std_host_name) %>% mutate(Var1=sample_name, sp_var1=std_host_name)
-second_join <-complete_sponge_raref %>% dplyr::select(sample_name, std_host_name) %>% mutate(Var2=sample_name, sp_var2=std_host_name)
-
-pairwise_vegdist_species <- left_join(pairwise_vegdist, first_join, by="Var1")
-head(pairwise_vegdist_species)
-pairwise_vegdist_species <- left_join(pairwise_vegdist_species, second_join, by="Var2")
-head(pairwise_vegdist_species)
-
-pairwise_vegdist_species_filtered <- pairwise_vegdist_species %>% 
-  mutate(sp_sp=paste0(pairwise_vegdist_species$sp_var1, pairwise_vegdist_species$sp_var2)) %>%
-  dplyr::select(Var1, Var2, dist.bray, sp_sp)
-head(pairwise_vegdist_species_filtered)
-
-#now I have to merge based on the distance between species
-head(species_dist)
-
-species_dist_to_merge <- species_dist %>% mutate(sp_sp=paste0(species_dist$Var1, species_dist$Var2), node_dist=species_dist$'value') %>%
-  dplyr::select(sp_sp, node_dist)
-head(species_dist_to_merge)
-
-# and merge them all
-
-bray_and_node <- left_join(pairwise_vegdist_species_filtered, species_dist_to_merge, by="sp_sp")
-head(bray_and_node)
-
-#check if NAs are for same species distance
-head(filter(bray_and_node, is.na(node_dist)==T))
-bray_and_node[is.na(bray_and_node$node_dist)==T,]$node_dist <- 0
-
-head(bray_and_node)
-
-
-# Lastly, I need to calculate the distance based on all the other variables
-
-### Now I'll select the variables I'm going to use forward and calculate pairwise distances between them
-names(complete_sponge_raref)
-sample_info <- c("sample_name", "std_host_name")
-numeric <-  c("apparent_oxygen_utilization_annual_1deg.nc","apparent_oxygen_utilization_monthly_1deg.nc",
-              "apparent_oxygen_utilization_seasonal_1deg.nc","dissolved_oxygen_annual_1deg.nc", "dissolved_oxygen_monthly_1deg.nc",
-              "dissolved_oxygen_seasonal_1deg.nc","nitrate_annual_1deg.nc", "nitrate_monthly_1deg.nc","nitrate_seasonal_1deg.nc",
-              "oxygen_saturation_annual_1deg.nc", "oxygen_saturation_monthly_1deg.nc","oxygen_saturation_seasonal_1deg.nc",
-              "phosphate_annual_1deg.nc", "phosphate_monthly_1deg.nc", "phosphate_seasonal_1deg.nc", "salinity_annual_1deg.nc",
-              "salinity_monthly_1deg.nc", "salinity_seasonal_1deg.nc", "silicate_annual_1deg.nc", "silicate_monthly_1deg.nc",
-              "silicate_seasonal_1deg.nc", "temperature_annual_1deg.nc", "temperature_monthly_1deg.nc", "temperature_seasonal_1deg.nc",
-              "Observed", "Chao1", "se.chao1", "ACE", "se.ACE", "Shannon", "Simpson", "InvSimpson", "Fisher")
-
-df_for_dists <- complete_sponge_raref %>% mutate_at(numeric, funs(as.character)) %>% mutate_at(numeric, funs(as.numeric))
-head(df_for_dists)
-rownames(df_for_dists) <- rownames(complete_sponge_raref)
-
-#I'm also going to select sample_name
-df_for_dists %>% dplyr::select(sample_name, apparent_oxygen_utilization_annual_1deg.nc,apparent_oxygen_utilization_monthly_1deg.nc,
-                               apparent_oxygen_utilization_seasonal_1deg.nc,dissolved_oxygen_annual_1deg.nc, dissolved_oxygen_monthly_1deg.nc,
-                               dissolved_oxygen_seasonal_1deg.nc,nitrate_annual_1deg.nc, nitrate_monthly_1deg.nc,nitrate_seasonal_1deg.nc,
-                               oxygen_saturation_annual_1deg.nc, oxygen_saturation_monthly_1deg.nc,oxygen_saturation_seasonal_1deg.nc,
-                               phosphate_annual_1deg.nc, phosphate_monthly_1deg.nc, phosphate_seasonal_1deg.nc, salinity_annual_1deg.nc,
-                               salinity_monthly_1deg.nc, salinity_seasonal_1deg.nc, silicate_annual_1deg.nc, silicate_monthly_1deg.nc,
-                               silicate_seasonal_1deg.nc, temperature_annual_1deg.nc, temperature_monthly_1deg.nc, temperature_seasonal_1deg.nc,
-                               Observed, Chao1, se.chao1, ACE, se.ACE, Shannon, Simpson, InvSimpson, Fisher) -> df_for_dists.numeric
-head(df_for_dists.numeric)
-rownames(df_for_dists.numeric) <- df_for_dists.numeric$sample_name
-df_for_dists.numeric <- dplyr::select(df_for_dists.numeric, -sample_name)
-
-melt(as.matrix(dist(df_for_dists.numeric[,1, drop=F])), value.name=colnames(df_for_dists.numeric)[1])
-
-#this one works!!
-dist.apply <- lapply(1:ncol(df_for_dists.numeric), function(i) melt(as.matrix(dist(df_for_dists.numeric[,i, drop=F])), value.name=colnames(df_for_dists.numeric)[i]))
-
-data.frame.dist <- as.data.frame(dist.apply)
-head(data.frame.dist)
-data.frame.dist.numbers <- select_if(data.frame.dist, is.numeric)
-head(data.frame.dist.numbers)
-data.frame.dist.numbers <- cbind(data.frame.dist.numbers, data.frame.dist[,1:2])
-head(data.frame.dist.numbers)
-
-head(bray_and_node)
-
-data.frame.dist.numbers <- data.frame.dist.numbers %>% mutate(unique_ident = paste0(data.frame.dist.numbers$Var1, data.frame.dist.numbers$Var2))
-bray_and_node <- bray_and_node %>% mutate(unique_ident = paste0(bray_and_node$Var1, bray_and_node$Var2)) %>% dplyr::select(-Var1, -Var2)
-
-final_sponge_dists <- left_join(data.frame.dist.numbers, bray_and_node, by="unique_ident")
-head(final_sponge_dists)
-head(pairwise_dists)
-
-dim(final_sponge_dists)
-dim(pairwise_dists)
-
-final_sponge_dists <- mutate(final_sponge_dists, dist_km =pairwise_dists$dist_km)
-head(final_sponge_dists)
-str(final_sponge_dists)
-
-final_sponge_dists_std <- final_sponge_dists %>% select_if(is.numeric) %>% mutate_each(funs(scale))
-final_sponge_dists_std <- cbind(final_sponge_dists_std, dplyr::select(final_sponge_dists, Var1, Var2, unique_ident, sp_sp))
-head(final_sponge_dists_std)
-dim(final_sponge_dists_std)
-
-boxplot(select_if(final_sponge_dists_std, is.numeric))
-
-write.table(final_sponge_dists_std, file = "/Users/decio/Documents/UT-AUSTIN/13_Fall_2017/SEM course/sponges/final_sponge_distances.txt")
-
-
+#Preaparing data to MPlus
 library(MplusAutomation)
-names(final_sponge_dists_std)
-final_sponge_dists_std_toMplus <- final_sponge_dists_std[,1:36]
-head(final_sponge_dists_std_toMplus)
+names(complete_sponge_raref)
 
-prepareMplusData(final_sponge_dists_std_toMplus, "/Users/decio/Documents/UT-AUSTIN/13_Fall_2017/SEM course/sponges/final_sponge_dists_std.dat")
+names(complete_sponge_raref)
 
 
-plot(final_sponge_dists_std_toMplus$node_dist, final_sponge_dists_std_toMplus$dist.bray)
-plot(final_sponge_dists_std_toMplus$dist_km, final_sponge_dists_std_toMplus$dist.bray)
 
+complete_sponge_raref_toMplus <- dplyr::select(complete_sponge_raref, latitude, longitude, apparent_oxygen_utilization_annual_1deg.nc,apparent_oxygen_utilization_monthly_1deg.nc,
+                                               apparent_oxygen_utilization_seasonal_1deg.nc,dissolved_oxygen_annual_1deg.nc, dissolved_oxygen_monthly_1deg.nc,
+                                               dissolved_oxygen_seasonal_1deg.nc,nitrate_annual_1deg.nc, nitrate_monthly_1deg.nc,nitrate_seasonal_1deg.nc,
+                                               oxygen_saturation_annual_1deg.nc, oxygen_saturation_monthly_1deg.nc,oxygen_saturation_seasonal_1deg.nc,
+                                               phosphate_annual_1deg.nc, phosphate_monthly_1deg.nc, phosphate_seasonal_1deg.nc, salinity_annual_1deg.nc,
+                                               salinity_monthly_1deg.nc, salinity_seasonal_1deg.nc, silicate_annual_1deg.nc, silicate_monthly_1deg.nc,
+                                               silicate_seasonal_1deg.nc, temperature_annual_1deg.nc, temperature_monthly_1deg.nc, temperature_seasonal_1deg.nc,
+                                               Axis.1, Axis.2, Observed, Shannon, Fisher, phylo1, phylo2)
+head(complete_sponge_raref_toMplus)
+
+prepareMplusData(complete_sponge_raref_toMplus, "/Users/decio/Documents/UT-AUSTIN/13_Fall_2017/SEM course/sponges/complete_sponge_raref_toMplus.dat")
 
 

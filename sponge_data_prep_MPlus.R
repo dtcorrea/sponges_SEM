@@ -202,6 +202,7 @@ complete_sponge_raref <- cbind(complete_sponge_raref, diversity_raref)
 dim(complete_sponge_raref)
 names(complete_sponge_raref)
 class(complete_sponge_raref)
+head(complete_sponge_raref)
 
 library(vegan)
 # calculate pairwise bray curtis distances
@@ -314,7 +315,7 @@ df_for_dists.numeric <- dplyr::select(df_for_dists.numeric, -sample_name)
 
 melt(as.matrix(dist(df_for_dists.numeric[,1, drop=F])), value.name=colnames(df_for_dists.numeric)[1])
 
-#this one works!!
+#this one works
 dist.apply <- lapply(1:ncol(df_for_dists.numeric), function(i) melt(as.matrix(dist(df_for_dists.numeric[,i, drop=F])), value.name=colnames(df_for_dists.numeric)[i]))
 
 data.frame.dist <- as.data.frame(dist.apply)
